@@ -14,6 +14,7 @@ import { app, shell, Notification, net as electronNet } from 'electron'
 import { execFileSync, spawn, execFile } from 'child_process'
 import { ManagedService, waitForReady } from '../process/managedService'
 import { spawnPty } from '../process/nativePty'
+import { getPythonRuntime, getOpenWebUICommand, getPythonCompatibilityEnv } from './pythonRuntime'
 
 import log from 'electron-log'
 log.transports.file.resolvePathFn = () => getLogFilePath('main')
@@ -178,14 +179,8 @@ const getPlatformString = () => {
   return platformMap[os.platform()] || 'unknown-linux-gnu'
 }
 
-const getArchString = () => {
-  const archMap = {
-    x64: 'x86_64',
-    arm64: 'aarch64',
-    ia32: 'i686'
-  }
-  return archMap[os.arch()] || 'x86_64'
-}
+const pythonRuntime = () => getPythonRuntime(os.platform(), os.arch())
+const getArchString = () => pythonRuntime().downloadArchitecture
 
 const generateDownloadUrl = () => {
   const baseUrl = 'https://github.com/astral-sh/python-build-standalone/releases/download'
@@ -250,11 +245,11 @@ export const downloadFileWithProgress = async (
 }
 
 export const getPythonDownloadPath = (): string => {
-  return path.join(getUserDataPath(), 'python.tar.gz')
+  return path.join(getUserDataPath(), pythonRuntime().archiveName)
 }
 
 export const getPythonInstallationDir = (): string => {
-  const pythonDir = path.join(getInstallDir(), 'python')
+  const pythonDir = path.join(getInstallDir(), pythonRuntime().directoryName)
   if (!fs.existsSync(pythonDir)) {
     try {
       fs.mkdirSync(pythonDir, { recursive: true })
@@ -280,6 +275,9 @@ const downloadPython = async (onProgress = null, signal?: AbortSignal) => {
   const checksum = pythonChecksums[`${getArchString()}-${getPlatformString()}`]
 
   log.info(`Detected system: ${os.platform()} ${os.arch()}`)
+  if (pythonRuntime().compatibilityMode) {
+    log.info('Using x64 Python through Windows ARM64 emulation for package compatibility')
+  }
   log.info(`Download path: ${downloadPath}`)
   log.info(`URL: ${url}`)
 
@@ -341,8 +339,10 @@ export const installPython = async (installationDir?: string, onStatus?: (status
   try {
     signal?.throwIfAborted()
     onStatus?.('Extracting Python…')
-    const installBase = getInstallDir()
-    await tar.x({ cwd: installBase, file: pythonDownloadPath })
+    fs.mkdirSync(installationDir, { recursive: true })
+    // Standalone archives have a top-level python/ directory. Extract its
+    // contents into the selected ABI-specific environment, including on retry.
+    await tar.x({ cwd: installationDir, file: pythonDownloadPath, strip: 1 })
   } catch (error) {
     log.error(error)
     // Remove possibly-corrupted download so next retry re-downloads
@@ -422,6 +422,7 @@ export const getProcessEnv = (extra: Record<string, string> = {}): Record<string
 
 const pythonEnv = (extra: Record<string, string> = {}): Record<string, string> => {
   const base = getProcessEnv(extra)
+  Object.assign(base, getPythonCompatibilityEnv(os.platform(), os.arch(), base))
 
   if (process.platform === 'win32') {
     // python.exe lives at the root of the installation directory on Windows
@@ -659,7 +660,7 @@ export const startServer = (onStatus?: (status: string) => void) => webuiService
     throw new Error(`Python executable not found at: ${pythonPath}`)
   }
 
-  const commandArgs = ['-m', 'uv', 'run', 'open-webui', 'serve', '--host', host]
+  const commandArgs = getOpenWebUICommand(os.platform(), os.arch(), host)
   const dataDir = getOpenWebUIDataPath()
   const secretKey = getSecretKey()
   if (!fs.existsSync(dataDir)) {

@@ -92,5 +92,5 @@ flatpak:
 npmRebuild: true
 publish:
   provider: github
-  owner: open-webui
-  repo: desktop
+  owner: Halloncream
+  repo: desktop-windows-arm64

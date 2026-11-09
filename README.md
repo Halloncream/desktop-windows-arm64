@@ -1,5 +1,9 @@
 # Open WebUI Desktop
 
+Windows ARM64 compatibility fork of [open-webui/desktop](https://github.com/open-webui/desktop).
+The desktop shell remains native ARM64; its Python backend uses Windows x64 emulation.
+See [Windows ARM64 compatibility](#windows-arm64-compatibility) below.
+
 [![Version](https://img.shields.io/github/v/release/open-webui/desktop?label=version&color=%2331c48d)](https://github.com/open-webui/desktop/releases)
 [![Downloads](https://img.shields.io/github/downloads/open-webui/desktop/total?color=%23764abc)](https://github.com/open-webui/desktop/releases)
 [![Discord](https://img.shields.io/discord/1170866489302188073?label=discord&color=%235865F2)](https://discord.gg/open-webui)
@@ -12,7 +16,7 @@
 ## Download
 
 - **macOS:** [Apple Silicon](https://github.com/open-webui/desktop/releases/latest/download/open-webui-arm64.dmg) · [Intel](https://github.com/open-webui/desktop/releases/latest/download/open-webui-x64.dmg)
-- **Windows:** [Intel / AMD (x64)](https://github.com/open-webui/desktop/releases/latest/download/open-webui-x64-setup.exe) · [ARM64](https://github.com/open-webui/desktop/releases/latest/download/open-webui-arm64-setup.exe)
+- **Windows:** [Intel / AMD (x64), upstream](https://github.com/open-webui/desktop/releases/latest/download/open-webui-x64-setup.exe) · [ARM64 compatibility build](https://github.com/Halloncream/desktop-windows-arm64/actions/workflows/windows-arm64.yml)
 - **Linux (Debian / Ubuntu / Mint):** [Intel / AMD (x64)](https://github.com/open-webui/desktop/releases/latest/download/open-webui_amd64.deb) · [ARM64](https://github.com/open-webui/desktop/releases/latest/download/open-webui_arm64.deb)
 - **Linux (AppImage):** [Intel / AMD (x64)](https://github.com/open-webui/desktop/releases/latest/download/open-webui_x86_64.AppImage) · [ARM64](https://github.com/open-webui/desktop/releases/latest/download/open-webui_arm64.AppImage)
 
@@ -36,6 +40,27 @@ Desktop runs your own local copy of Open WebUI. If you already use Open WebUI on
 |--|-------------|
 | **Disk** | 5 GB+ |
 | **OS** | macOS 12+, Windows 10+, modern Linux (glibc 2.28+) |
+
+## Windows ARM64 compatibility
+
+On Windows ARM64, the desktop shell and llama.cpp remain native ARM64. The
+Open WebUI backend uses x64 Python through Windows' built-in x64 emulation,
+because required packages such as OpenCV do not publish Windows ARM64 wheels.
+No WSL, Docker, or system Python installation is needed.
+
+Setup downloads the checksum-verified x64 Python distribution and stores it in
+`python-x64` under the installation directory. Its download cache is separate
+from native Python. Existing `python` environments are preserved; chat data
+continues to use the configured data directory. The first run installs the
+backend dependencies into the new environment.
+
+The compatibility launcher preloads scikit-learn's metrics before PyTorch to
+avoid a Windows DLL-loader startup hang. OpenBLAS and OpenMP default to one
+thread for this Python process; explicit environment settings take precedence.
+
+This requires Windows with working x64 emulation. Python extensions run under
+emulation and may be slower. This change does not add native ARM64 CUDA support;
+llama.cpp acceleration still depends on the available runtime builds.
 
 ## Privacy
 
